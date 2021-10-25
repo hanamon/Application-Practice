@@ -5,8 +5,31 @@ const cors = require('cors');
 const morgan = require('morgan');
 const express = require('express');
 const cookieParser = require('cookie-parser');
+const multer = require('multer');
+const multerS3 = require('multer-s3');
+const AWS = require('aws-sdk');
 const app = express();
 const { order } = require('./models');
+
+// AWS S3 File Upload
+const s3 = new AWS.S3({
+  accessKeyId: process.env.AWS_S3_ACCESS_KEY_ID, //노출주의
+  secretAccessKey: process.env.AWS_S3_SECRET_ACCESS_KEY, //노출주의
+  region: process.env.AWS_S3_REGION //노출주의
+});
+
+const upload = multer({
+  storage: multerS3({
+    s3: s3,
+    bucket: 'jisiksponsor.com/resource',
+    key: function (req, file, done) {
+      const ext = path.extname(file.originalname);
+      done(null, Date.now() + '-' + file.originalname);
+    },
+    acl: 'public-read',
+    contentType: multerS3.AUTO_CONTENT_TYPE
+  })
+});
 
 // Handling unexpected exceptions
 process.on('uncaughtException', (err) => {
@@ -31,6 +54,17 @@ app.get('/', (req, res) => {
   res.send('Hello World!');
 });
 
+// upload view
+app.get('/upload', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views/upload.html'));
+});
+
+app.post('/upload', upload.single('image'), (req, res) => {
+  const image = req.file;
+  res.json({ image });
+});
+
+// import view
 app.get('/import', (req, res) => {
   res.sendFile(path.join(__dirname, 'views/import.html'));
 });
