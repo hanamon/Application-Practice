@@ -47,7 +47,7 @@
           buyer_postcode: '01181',
           // 모바일 환경에서 PG사의 웹사이트로 리디렉션되면 콜백 함수가 실행되지 않기 때문에 아래와 같이 해준다.
           // 결제 프로세스 완료 후 리디렉션 될 URL (성공, 실패 등 모두 포함)
-          m_redirect_url: 'http://localhost:4000/payments/complete/mobile'
+          m_redirect_url: '/payments/complete/mobile'
         };
 
         // PG 결제 프로세스 완료 이후 호출됨
@@ -57,7 +57,7 @@
             // jQuery로 HTTP 요청
             jQuery
               .ajax({
-                url: 'http://localhost:4000/payments/complete',
+                url: '/payments/complete',
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 data: {

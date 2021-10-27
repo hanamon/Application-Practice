@@ -1,6 +1,7 @@
 require('dotenv').config();
 const path = require('path');
 const axios = require('axios');
+const crypto = require('crypto');
 const cors = require('cors');
 const morgan = require('morgan');
 const express = require('express');
@@ -8,8 +9,12 @@ const cookieParser = require('cookie-parser');
 const multer = require('multer');
 const multerS3 = require('multer-s3');
 const AWS = require('aws-sdk');
+const nodemailer = require('nodemailer');
 const app = express();
-const { order } = require('./models');
+const { order, user } = require('./models');
+
+app.set('views', path.join(__dirname, 'templates'));
+app.set('view engine', 'pug');
 
 // AWS S3 File Upload
 const s3 = new AWS.S3({
@@ -52,6 +57,16 @@ app.use(
 // Routing
 app.get('/', (req, res) => {
   res.send('Hello World!');
+});
+
+// HTML template engine
+app.get('/pug', (req, res) => {
+  res.render('emails/customer-new-account', { title: '퍼그지롱롱' });
+});
+
+// HTML template engine
+app.get('/layout', (req, res) => {
+  res.render('index', { title: '레이아웃' });
 });
 
 // upload view
@@ -264,6 +279,69 @@ app.get('/payments/complete/mobile/', async (req, res) => {
   }
 });
 
+// signup
+app.get('/signup', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views/signup.html'));
+});
+
+app.post('/signup', async (req, res) => {
+  const { email, password } = req.body;
+
+  const key_one = crypto.randomBytes(256).toString('hex').substr(100, 5);
+  const key_two = crypto.randomBytes(256).toString('base64').substr(50, 5);
+  const key_for_verify = key_one + key_two;
+
+  const newUser = await user.create({ email, password, key_for_verify });
+
+  const url = 'http://localhost:4000/confirm/email?key=' + key_for_verify;
+
+  const smtpTransport = {
+    host: process.env.NODEMAILER_HOST,
+    port: process.env.NODEMAILER_PORT,
+    secure: false,
+    auth: {
+      user: process.env.NODEMAILER_USER,
+      pass: process.env.NODEMAILER_PASS
+    }
+  };
+
+  const content = {
+    from: '"Hanamon 👻" <devparkhana@gmail.com>',
+    to: '76a29c582d-dfb390@inbox.mailtrap.io',
+    subject: '회원가입 이메일 인증을 진행해주세요.',
+    html: `<h1>회원가입 인증 URL에 접속하여 인증을 완료해주세요.</h1><br><a src="${url}">${url}</a>`
+  };
+
+  const send = async (data) => {
+    nodemailer.createTransport(smtpTransport).sendMail(data, (err, info) => {
+      if (err) console.log(err);
+      console.log('email has been sent!');
+    });
+  };
+
+  send(content);
+
+  res.send(
+    '<script type="text/javascript">alert("이메일을 확인하세요."); window.location="/"; </script>'
+  );
+});
+
+app.get('/confirm/email', async (req, res) => {
+  const { key } = req.query;
+  console.log(key);
+  const findUser = await user.findOne({ where: { key_for_verify: key } });
+  if (!findUser) return res.status(404).send('Not Found!');
+  const updateUser = await user.update(
+    { email_verified: true },
+    { where: { key_for_verify: key } }
+  );
+  res.redirect('http://localhost:4000/mypage');
+});
+
+app.get('/mypage', (req, res) => {
+  res.send('mypage');
+});
+
 // Error handling
 app.use((req, res, next) => {
   const error = new Error(
@@ -274,7 +352,11 @@ app.use((req, res, next) => {
 });
 
 app.use((err, req, res, next) => {
-  res.status(err.status || 500).send(err.message);
+  res.locals.message = err.message;
+  res.locals.status = err.status;
+  res.locals.error = process.env.NODE_ENV !== 'production' ? err : {};
+  res.status(err.status || 500);
+  res.render('error');
 });
 
 module.exports = app;
